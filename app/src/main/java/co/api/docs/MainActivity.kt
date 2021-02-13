@@ -2,14 +2,12 @@ package co.api.docs
 
 import android.os.Bundle
 import android.util.Log
-import android.view.LayoutInflater
-import android.view.ViewGroup
+import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
-import androidx.recyclerview.widget.DiffUtil
-import androidx.recyclerview.widget.ListAdapter
-import androidx.recyclerview.widget.RecyclerView
+import androidx.lifecycle.lifecycleScope
 import co.api.docs.databinding.ActivityMainBinding
-import co.api.docs.databinding.ItemApiBinding
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
@@ -18,14 +16,20 @@ import retrofit2.converter.gson.GsonConverterFactory
 
 class MainActivity : AppCompatActivity() {
 
+    private val viewModel: MainViewModel by viewModels()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         val binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        val adapter = ApiAdapter()
+        val adapter = ApiAdapter {
+            viewModel.onItemClicked(it)
+        }
         binding.apis.adapter = adapter
+
+        viewModel.list.onEach { adapter.submitList(it) }.launchIn(lifecycleScope)
 
         val retrofit =
             Retrofit.Builder()
@@ -35,7 +39,7 @@ class MainActivity : AppCompatActivity() {
                 .create(DocsApi::class.java)
         retrofit.apis().enqueue(object : Callback<List<Api>> {
             override fun onResponse(call: Call<List<Api>>, response: Response<List<Api>>) {
-                adapter.submitList(response.body())
+                viewModel.onDocReceived(response.body()!!)
             }
 
             override fun onFailure(call: Call<List<Api>>, t: Throwable) {
@@ -45,35 +49,5 @@ class MainActivity : AppCompatActivity() {
         })
     }
 
-    class ApiAdapter : ListAdapter<Api, ApiViewHolder>(ApiDiffUtil()) {
-
-        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ApiViewHolder {
-            return ApiViewHolder(ItemApiBinding.inflate(LayoutInflater.from(parent.context), parent, false))
-        }
-
-        override fun onBindViewHolder(holder: ApiViewHolder, position: Int) {
-            holder.bind(getItem(position))
-        }
-
-    }
-
-    class ApiViewHolder(private val binding: ItemApiBinding) : RecyclerView.ViewHolder(binding.root) {
-
-        fun bind(api: Api) {
-            binding.title.text = api.name
-        }
-
-    }
-
-    class ApiDiffUtil : DiffUtil.ItemCallback<Api>() {
-
-        override fun areItemsTheSame(oldItem: Api, newItem: Api): Boolean {
-            return oldItem == newItem
-        }
-
-        override fun areContentsTheSame(oldItem: Api, newItem: Api): Boolean {
-            return oldItem == newItem
-        }
-
-    }
 }
+
